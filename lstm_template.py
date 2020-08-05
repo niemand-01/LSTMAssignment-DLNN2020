@@ -48,6 +48,8 @@ batch_size = 32
 
 concat_size = emb_size + hidden_size
 
+
+
 # model parameters
 # char embedding parameters
 Wex = np.random.randn(emb_size, vocab_size) * std  # embedding layer
@@ -67,6 +69,11 @@ bc = np.zeros((hidden_size, 1))  # memory bias
 Why = np.random.randn(vocab_size, hidden_size) * std  # hidden to output
 by = np.random.randn(vocab_size, 1) * std  # output bias
 
+
+
+
+
+
 data_stream = np.asarray([char_to_ix[char] for char in data])
 print(data_stream.shape)
 
@@ -84,6 +91,7 @@ def forward(inputs, targets, memory):
     hprev, cprev = memory
     xs, wes, hs, ys, ps, cs, zs, ins, c_s, ls = {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
     os, fs = {}, {}
+
     hs[-1] = np.copy(hprev)
     cs[-1] = np.copy(cprev)
 
@@ -99,24 +107,43 @@ def forward(inputs, targets, memory):
         # convert word indices to word embeddings
         wes[t] = np.dot(Wex, xs[t])
 
+
+
         # LSTM cell operation
         # first concatenate the input and h to get z
         zs[t] = np.row_stack((hs[t - 1], wes[t]))
 
         # compute the forget gate
         # f = sigmoid(Wf * z + bf)
+        fs[t] = sigmoid(np.dot(Wf,zs[t])+bf)
 
         # compute the input gate
         # i = sigmoid(Wi * z + bi)
+        ins[t] = sigmoid(np.dot(Wi,zs[t])+bi)
+
         # compute the candidate memory
         # c_ = tanh(Wc * z + bc)
+        c_s[t] = np.tanh(np.dot(Wc,zs[t])+bc)
 
         # new memory: applying forget gate on the previous memory
         # and then adding the input gate on the candidate memory
         # c_t = f * c_(t-1) + i * c_
+        cs[t] = np.dot(fs[t],c_s[t-1])+np.dot(ins[t],c_s[t])
 
         # output gate
         #o = sigmoid(Wo * z + bo)
+        os[t] = sigmoid(np.dot(wo,zs[t])+bo)
+
+        #hidden state disappeared??
+        hs[t] = np.dot(os[t],np.tanh(cs[t]))
+
+        #final output(prediction)
+        ys[t] = np.dot(Why,hs[t])+by
+        #use prediction to calculate cross entropy loss
+        ps[t] = softmax(ys[t])
+
+
+
 
         # DONE LSTM
         # output layer - softmax and cross-entropy loss
@@ -134,7 +161,7 @@ def forward(inputs, targets, memory):
         loss += loss_t
         # loss += -np.log(ps[t][targets[t],0])
 
-    # activations = ()
+    activations = (xs, wes, hs, ys, ps, cs, zs, ins, c_s, ls, os, fs)
     memory = (hs[- 1], cs[-1])
 
     return loss, activations, memory
@@ -159,6 +186,66 @@ def backward(activations, clipping=True):
     for t in reversed(range(input_length)):
         # computing the gradients here
 
+        # gradient from loss to ps: dL / dv
+        do = ps[t] - ls[t]
+
+        # gradient dL / dwhy 
+        dWhy += np.dot(do,hs[t].T)
+
+        # gradient dL / dby
+        dby += do
+
+        # gradient dL / dWo
+        dL_Ht = np.dot(Why.T,do)
+        dHt_Ot = np.tanh(cs[t])
+        Ao = np.dot(wo,zs[t])+bo
+        dOt_Ao = dsigmoid(Ao)
+        dAo_Wo = zs[t]
+
+        dWo += dL_Ht*dHt_Ot*dOt_Ao*dAo_Wo
+
+        # gradient dL / dBo
+        dbo += dL_Ht*dHt_Ot*dOt_Ao
+
+        # gradient dL / dWc
+        dHt_Ct = np.dot(os[t],dtanh(cs[t]))
+        dCt_C_t = ins[t]
+        Ac = np.dot(Wc,zs[t])+bc
+        dC_t_Ac = dtanh(Ac)
+        dAc_Wc = zs[t]
+
+        dWc += dL_Ht*dHt_Ct*dCt_C_t*dC_t_Ac*dAc_Wc
+
+        # gradient dL / dWc
+        dbc += dL_Ht*dHt_Ct*dCt_C_t*dC_t_Ac
+
+        # gradient dL / dWf
+        dCt_Ft = cs[t-1]
+        Af = np.dot(Wf,zs[t])+bf
+        dFt_Af = dtanh(Af)
+        dAf_Wf = zs[t]
+
+        dWf += dL_Ht*dHt_Ct*dCt_Ft*dFt_Af*dAf_Wf
+        dbf += dL_Ht*dHt_Ct*dCt_Ft*dFt_Af
+
+        # gradient dL / dWi
+        dCt_It = c_s[t]
+        Ai = np.dot(Wi,zs[t])+bi
+        dIt_Ai = dtanh(Ai)
+        dAi_Wi = zs[t]
+
+        dWi += dL_Ht*dHt_Ct*dCt_It*dIt_Ai*dAi_Wi
+        dbi += dL_Ht*dHt_Ct*dCt_It*dIt_Ai
+
+
+        # dWex, dhnext, dcnext ??? 
+
+        
+
+
+
+
+
     # clip to mitigate exploding gradients
     if clipping:
         for dparam in [dWex, dWf, dWi, dWo, dWc, dbf, dbi, dbo, dbc, dWhy, dby]:
@@ -169,8 +256,13 @@ def backward(activations, clipping=True):
     return gradients
 
 
+
+
+
+
+
 def sample(memory, seed_ix, n):
-    """
+  """
   sample a sequence of integers from the model
   h is memory state, seed_ix is seed letter for first time step
   """
@@ -190,6 +282,12 @@ def sample(memory, seed_ix, n):
         x[index] = 1
         ixes.append(index)
     return ixes
+
+
+
+
+
+
 
 
 if option == 'train':

@@ -50,6 +50,17 @@ learning_rate = 0.02
 std = 0.02  # The standard deviation for parameter initilization
 batch_size = 4
 
+
+
+
+
+
+
+
+
+
+
+
 # model parameters
 # Here we initialize the parameters based an random uniform distribution, with the std of 0.01
 
@@ -75,6 +86,8 @@ by = np.random.randn(vocab_size, 1) * std  # hidden bias
 mWex, mWxh, mWhh, mWhy = np.zeros_like(Wex), np.zeros_like(Wxh), np.zeros_like(Whh), np.zeros_like(Why)
 mbh, mby = np.zeros_like(bh), np.zeros_like(by)
 
+
+
 # this will load the data into memory
 data_stream = np.asarray([char_to_ix[char] for char in data])
 print(data_stream.shape)
@@ -82,6 +95,16 @@ print(data_stream.shape)
 bound = (data_stream.shape[0] // (seq_length * batch_size)) * (seq_length * batch_size)
 cut_stream = data_stream[:bound]
 cut_stream = np.reshape(cut_stream, (batch_size, -1))
+
+
+
+
+
+
+
+
+
+
 
 
 def forward(inputs, labels, memory, batch_size=1):
@@ -117,6 +140,9 @@ def forward(inputs, labels, memory, batch_size=1):
         for b in range(batch_size):
             cs[t][inputs[b][t]][b] = 1
 
+
+
+
         # transform the one hot vector to embedding
         # x = Wemb x c
         xs[t] = np.dot(Wex, cs[t])
@@ -138,6 +164,11 @@ def forward(inputs, labels, memory, batch_size=1):
         for b in range(batch_size):
             ys[t][labels[b][t]][b] = 1
 
+
+
+
+
+
         # cross entropy loss at time t:
         loss_t = np.sum(-np.log(ps[t]) * ys[t])
 
@@ -147,6 +178,15 @@ def forward(inputs, labels, memory, batch_size=1):
     activations = (xs, cs, hs, os, ps, ys)
     last_hidden = hs[-1]
     return loss, activations, last_hidden
+
+
+
+
+
+
+
+
+
 
 
 def backward(activations, clipping=True, scale=True):
@@ -219,6 +259,13 @@ def backward(activations, clipping=True, scale=True):
     return gradients
 
 
+
+
+
+
+
+
+
 def sample(h, seed_ix, n):
     """
     sample a sequence of integers from the model
@@ -244,6 +291,16 @@ def sample(h, seed_ix, n):
         generated_chars.append(index)
 
     return generated_chars
+
+
+
+
+
+
+
+
+
+
 
 
 option = sys.argv[1]  # train or gradcheck
@@ -290,6 +347,15 @@ if option == 'train':
 
         p += seq_length  # move data pointer
         n += 1  # iteration counter
+
+
+
+
+
+
+
+
+
 
 elif option == 'gradcheck':
 
