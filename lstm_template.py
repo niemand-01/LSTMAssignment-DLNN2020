@@ -128,14 +128,14 @@ def forward(inputs, targets, memory):
         # new memory: applying forget gate on the previous memory
         # and then adding the input gate on the candidate memory
         # c_t = f * c_(t-1) + i * c_
-        cs[t] = np.dot(fs[t],c_s[t-1])+np.dot(ins[t],c_s[t])
+        cs[t] = fs[t]*cs[t-1]+ins[t]*c_s[t]
 
         # output gate
         #o = sigmoid(Wo * z + bo)
-        os[t] = sigmoid(np.dot(wo,zs[t])+bo)
+        os[t] = sigmoid(np.dot(Wo,zs[t])+bo)
 
         #hidden state disappeared??
-        hs[t] = np.dot(os[t],np.tanh(cs[t]))
+        hs[t] = os[t]*np.tanh(cs[t])
 
         #final output(prediction)
         ys[t] = np.dot(Why,hs[t])+by
@@ -185,6 +185,8 @@ def backward(activations, clipping=True):
     # back propagation through time starts here
     for t in reversed(range(input_length)):
         # computing the gradients here
+        # * = np.matmul()
+        # @ = np.dot()
 
         # gradient from loss to ps: dL / dv
         do = ps[t] - ls[t]
@@ -192,54 +194,69 @@ def backward(activations, clipping=True):
         # gradient dL / dwhy 
         dWhy += np.dot(do,hs[t].T)
 
-        # gradient dL / dby
-        dby += do
+        # gradient dL / dby ,attention: b is a scaler, we need to sum up the matrice
+        dby += np.sum(do, axis=-1, keepdims=True)
 
         # gradient dL / dWo
         dL_Ht = np.dot(Why.T,do)
         dHt_Ot = np.tanh(cs[t])
-        Ao = np.dot(wo,zs[t])+bo
-        dOt_Ao = dsigmoid(Ao)
+        dOt_Ao = dsigmoid(os[t])
         dAo_Wo = zs[t]
 
-        dWo += dL_Ht*dHt_Ot*dOt_Ao*dAo_Wo
+        dWo += dL_Ht*dHt_Ot*dOt_Ao @ dAo_Wo.T
 
         # gradient dL / dBo
-        dbo += dL_Ht*dHt_Ot*dOt_Ao
+        dbo += np.sum(dL_Ht*dHt_Ot*dOt_Ao, axis=-1, keepdims=True)
 
         # gradient dL / dWc
-        dHt_Ct = np.dot(os[t],dtanh(cs[t]))
+        dHt_Ct = os[t]*dtanh(cs[t])
         dCt_C_t = ins[t]
-        Ac = np.dot(Wc,zs[t])+bc
-        dC_t_Ac = dtanh(Ac)
+        dC_t_Ac = dtanh(c_s[t])
         dAc_Wc = zs[t]
 
-        dWc += dL_Ht*dHt_Ct*dCt_C_t*dC_t_Ac*dAc_Wc
+
+
+        dWc += dL_Ht*dHt_Ct*dCt_C_t*dC_t_Ac @ dAc_Wc.T
 
         # gradient dL / dWc
-        dbc += dL_Ht*dHt_Ct*dCt_C_t*dC_t_Ac
+        dbc += np.sum(dL_Ht*dHt_Ct*dCt_C_t*dC_t_Ac, axis=-1, keepdims=True)
 
         # gradient dL / dWf
         dCt_Ft = cs[t-1]
-        Af = np.dot(Wf,zs[t])+bf
-        dFt_Af = dtanh(Af)
+        dFt_Af = dtanh(fs[t])
         dAf_Wf = zs[t]
 
-        dWf += dL_Ht*dHt_Ct*dCt_Ft*dFt_Af*dAf_Wf
-        dbf += dL_Ht*dHt_Ct*dCt_Ft*dFt_Af
+        dWf += dL_Ht*dHt_Ct*dCt_Ft*dFt_Af @ dAf_Wf.T
+        dbf += np.sum(dL_Ht*dHt_Ct*dCt_Ft*dFt_Af, axis=-1, keepdims=True)
 
         # gradient dL / dWi
         dCt_It = c_s[t]
-        Ai = np.dot(Wi,zs[t])+bi
-        dIt_Ai = dtanh(Ai)
+        dIt_Ai = dtanh(ins[t])
         dAi_Wi = zs[t]
 
-        dWi += dL_Ht*dHt_Ct*dCt_It*dIt_Ai*dAi_Wi
-        dbi += dL_Ht*dHt_Ct*dCt_It*dIt_Ai
+        dWi += dL_Ht*dHt_Ct*dCt_It*dIt_Ai @ dAi_Wi.T
+        dbi += np.sum(dL_Ht*dHt_Ct*dCt_It*dIt_Ai , axis=-1, keepdims=True)
 
 
-        # dWex, dhnext, dcnext ??? 
+        # gradien dL /dWex
+        dAo_Zo = Wo
+        dZo_Wex,dZi_Wex,dZc_Wex,dZf_Wex = xs[t]
+        dAi_Zi = Wi
+        dAc_Zc = Wc
+        dAf_Zf = Wf
 
+        dI2Wex = dL_Ht*dHt_Ct*dCt_It*dIt_Ai*dAi_Zi*dZi_Wex
+
+        dO2Wex = dL_Ht*dHt_Ot*dOt_Ao*dAo_Zo*dZo_Wex
+
+        dC2Wex = dL_Ht*dHt_Ct*dCt_C_t*dC_t_Ac*dAc_Zc*dZc_Wex
+
+        dF2Wex = dL_Ht*dHt_Ct*dCt_Ft*dFt_Af*dAf_Zf*dZf_Wex
+
+        dWex += dI2Wex+dO2Wex+dC2Wex+dF2Wex
+
+
+        # dhnext, dcnext ??? 
         
 
 
@@ -262,10 +279,10 @@ def backward(activations, clipping=True):
 
 
 def sample(memory, seed_ix, n):
-  """
-  sample a sequence of integers from the model
-  h is memory state, seed_ix is seed letter for first time step
-  """
+    """
+     sample a sequence of integers from the model
+     h is memory state, seed_ix is seed letter for first time step
+    """
     h, c = memory
     x = np.zeros((vocab_size, 1))
     x[seed_ix] = 1
