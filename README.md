@@ -45,3 +45,22 @@ The gradcheck should be very similar and the implementation should be able to pa
 Then you can implement sampling and see how it trains to generate new characters (It should generate much better than the Vanilla RNN). 
 
 Note that: the template code and the RNN code is just a guide to make you have a fast start. You are encouraged to make any (change) if necessary, as long as the final work ends up with an LSTM network. For example, in the other assignment you can find the implementation for Adam which might help learning faster than Adagrad (but more expensive to compute). 
+
+# Remark on 05.08 by Weikang Wu
+
++ I changed 2 parts in the template,  __forward__ and  __backprop__ functions, the related gradient updates for weights are calculated manuelly, a picture of that was uploaded inside the notes directory.
++ sadly, i have trouble with matrices manipulation, which dont fit each other, further look into matrices dimension is needed. Nevertheless, the basic structure of implementation based on the formular is done.
+
+- further work:
+  - change the dimensions of matrices (debug)
+  - test to see the results (gradient check)
+
++ python notes:
++ * = np.dot
++ @ = np.matmul (element-wise multiply)
++ np.sum()
+
+- question:
+- the derivative of A*B to A is B?
+- the derivative of A@B to A is B?
+
